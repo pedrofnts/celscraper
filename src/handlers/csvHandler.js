@@ -1,7 +1,7 @@
 const fs = require("fs");
 const createCsvStringifier = require("csv-writer").createObjectCsvStringifier;
 const path = require("path");
-const csv = require('csv-parse');
+const csv = require("csv-parse");
 
 let existingPlaceIds = new Set();
 
@@ -84,48 +84,65 @@ function getCsvStringifier(headers) {
 }
 
 async function readCoordinatesFromCSV(filePath) {
-  // Extrai o estado do nome do arquivo
-  const estado = path.basename(filePath, '.csv');
-  
-  // Cria o arquivo de backup se não existir
-  const backupPath = filePath + '.backup';
+  const estado = path.basename(filePath, ".csv");
+
+  const backupPath = filePath + ".backup";
   if (!fs.existsSync(backupPath)) {
     fs.copyFileSync(filePath, backupPath);
-    console.log('Backup do arquivo de entrada criado');
+    console.log("Backup do arquivo de entrada criado");
   }
 
   return new Promise((resolve, reject) => {
     try {
-      // Lê do arquivo de backup ao invés do original
-      const fileContent = fs.readFileSync(backupPath, 'utf-8');
-      const lines = fileContent.split('\n');
-      
-      // Remove o cabeçalho e guarda para depois
+      const fileContent = fs.readFileSync(backupPath, "utf-8");
+      const lines = fileContent.split("\n");
+
+      // Remove o cabeçalho
       const header = lines[0];
       lines.splice(0, 1);
-      
-      // Inverte a ordem das linhas (de baixo para cima)
-      const reversedLines = lines.reverse();
-      
-      const coordinates = [];
-      
-      // Processa cada linha
-      reversedLines.forEach(line => {
-        if (line.trim()) {  // Ignora linhas vazias
-          const row = line.split(',');
-          coordinates.push({
-            latitude: parseFloat(row[0]),
-            longitude: parseFloat(row[1]),
-            zoom: 15, // Força zoom 15
-            estado: estado, // Usa o nome do arquivo como estado
-            originalLine: line
-          });
-        }
-      });
 
-      // Se o arquivo de backup estiver vazio (só com cabeçalho), recria ele
+      // Remove linhas vazias
+      const validLines = lines.filter((line) => line.trim());
+
+      // Reorganiza as linhas alternando entre início e fim
+      const coordinates = [];
+      let frontIndex = 0;
+      let backIndex = validLines.length - 1;
+
+      while (frontIndex <= backIndex) {
+        // Adiciona do início se houver
+        if (frontIndex <= backIndex) {
+          const frontLine = validLines[frontIndex];
+          const frontRow = frontLine.split(",");
+          coordinates.push({
+            latitude: parseFloat(frontRow[0]),
+            longitude: parseFloat(frontRow[1]),
+            zoom: 15,
+            estado: estado,
+            originalLine: frontLine,
+            position: "início", // Para log
+          });
+          frontIndex++;
+        }
+
+        // Adiciona do final se houver e não for a mesma linha
+        if (frontIndex <= backIndex) {
+          const backLine = validLines[backIndex];
+          const backRow = backLine.split(",");
+          coordinates.push({
+            latitude: parseFloat(backRow[0]),
+            longitude: parseFloat(backRow[1]),
+            zoom: 15,
+            estado: estado,
+            originalLine: backLine,
+            position: "final", // Para log
+          });
+          backIndex--;
+        }
+      }
+
       if (coordinates.length === 0) {
-        console.log('Arquivo de backup vazio, recriando do original...');
+        console.log("Arquivo de backup vazio, recriando do original...");
         fs.copyFileSync(filePath, backupPath);
       }
 
@@ -138,13 +155,15 @@ async function readCoordinatesFromCSV(filePath) {
 
 function removeProcessedCoordinate(filePath, originalLine) {
   try {
-    const backupPath = filePath + '.backup';
-    const content = fs.readFileSync(backupPath, 'utf-8');
-    const lines = content.split('\n');
-    const newContent = lines.filter(line => line.trim() !== originalLine.trim()).join('\n');
+    const backupPath = filePath + ".backup";
+    const content = fs.readFileSync(backupPath, "utf-8");
+    const lines = content.split("\n");
+    const newContent = lines
+      .filter((line) => line.trim() !== originalLine.trim())
+      .join("\n");
     fs.writeFileSync(backupPath, newContent);
   } catch (error) {
-    console.error('Erro ao remover linha processada:', error);
+    console.error("Erro ao remover linha processada:", error);
   }
 }
 
